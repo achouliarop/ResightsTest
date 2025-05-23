@@ -107,3 +107,57 @@ Calculate the "real ownership" percentages (lower, average, upper) for entities 
    - After Iteration 3: `RealStake_C1_in_FC = 100%`, `RealStake_C2_in_FC = 55%`.
 
 The values have converged: C1 effectively owns 100% of FC, and C2 effectively owns 55% of FC.
+
+## How to Run
+
+1. **Requirements**  
+   Python
+
+   ```bash
+   # Clone repo
+   git clone https://github.com/achouliarop/ResightsTest.git
+   cd ResightsTest
+
+   ```
+
+2. **Input Format**
+   See `input.json` example:
+
+   ```json
+   [
+     {
+       "id": "123_456",
+       "source": 123,
+       "source_name": "123",
+       "source_depth": 1,
+       "target": 456,
+       "target_name": "456",
+       "target_depth": 0,
+       "share": "10-15%",
+       "real_lower_share": null,
+       "real_average_share": null,
+       "real_upper_share": null,
+       "active": true
+     }
+   ]
+   ```
+
+3. **Execution**
+
+   ```bash
+   python -m calculator.calculator [input_file] [output_file]
+   ```
+
+   if input_file or output_file are not provided, the script will use the default values: `ResightsApS.json` and `output.json` respectively.
+
+   For every object in the array the script will calculate the `real_lower_share`, `real_average_share`, and `real_upper_share` fields:
+
+   - for total ownership of the focus company(depth=0) if the object has source_depth > 0 and target_depth >= 0 or
+   - for total ownership that the focus company(depth=0) owns of the object if the object has target_depth < 0.
+
+4. **Validation**
+   Test cases:
+
+   ```bash
+   python -m unittest tests.calculator_tests tests.helpers_tests
+   ```
