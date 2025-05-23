@@ -52,6 +52,23 @@ def multiply_shares(share_tuple1, share_tuple2):
     new_avg = (new_lower + new_upper) / 2.0
     return new_lower, new_avg, new_upper
 
+def add_shares(share_tuple1, share_tuple2):
+    """
+    Adds two share tuples (lower, avg, upper).
+    Assumes share_tuple components are fractions (e.g., 0.5 for 50%).
+    The resulting average is recalculated as (new_lower + new_upper) / 2.
+    Results are rounded to avoid floating-point precision issues.
+    """
+    l1, _, u1 = share_tuple1
+    l2, _, u2 = share_tuple2
+
+    # Shares can exceed 1.0 if an entity is owned through multiple paths by the same ultimate owner.
+    # Clamping at 1.0 is needed as an entity can't own more than 100% of another entity.
+    new_lower = round(min(1.0, l1 + l2), 10)
+    new_upper = round(min(1.0, u1 + u2), 10)
+    new_avg = round((new_lower + new_upper) / 2.0, 10)
+    return new_lower, new_avg, new_upper
+
 def update_edge_shares(edge, share_tuple):
     """
     Updates edge with new share values.

@@ -1,6 +1,6 @@
 import json
 import copy
-from .helpers import parse_share_string, multiply_shares, get_share_tuple_from_edge, update_edge_shares
+from .helpers import parse_share_string, multiply_shares, add_shares, get_share_tuple_from_edge, update_edge_shares
 
 def calculate_real_shares(network):
     """
@@ -19,23 +19,35 @@ def calculate_real_shares(network):
     # Initialize shares
     initialize_shares(network)
 
-    for edge in sorted_edges:
-        if not edge['active']:
-            continue
-        
-        source_id = edge['source']
-        target_id = edge['target']
-        target_depth = edge['target_depth']
-        edge_share = parse_share_string(edge['share'])
+    # Iteratively calculate real shares until convergence
+    max_iterations = 10
+    epsilon = 0.001
 
-        if target_depth >= 0:
-            process_upstream_edge(edge, source_id, target_id, edge_share, outgoing_edges)
-        else:
-            process_downstream_edge(edge, source_id, target_id, edge_share, incoming_edges)
+    for iteration in range(max_iterations):
+        max_change = 0.0
+        previous_values_dict = {item['id']: item for item in copy.deepcopy(network)}
+
+        for edge in sorted_edges:
+            if not edge['active']:
+                continue
+            
+            source_id = edge['source']
+            target_id = edge['target']
+            target_depth = edge['target_depth']
+            edge_share = parse_share_string(edge['share'])
+
+            if target_depth >= 0:
+                max_change = process_upstream_edge(edge, source_id, target_id, edge_share, 
+                                                outgoing_edges, previous_values_dict, max_change)
+            else:
+                max_change = process_downstream_edge(edge, source_id, target_id, edge_share, 
+                                                  incoming_edges, previous_values_dict, max_change)
+
+        if max_change < epsilon:
+            print(f"Converged after {iteration + 1} iterations.")
+            break
 
     return network
-
-
 
 def initialize_shares(edges):
     """
@@ -114,7 +126,23 @@ def sort_edges_by_depth(edges):
     # Combine while maintaining order
     return sorted_upstream + sorted_downstream
 
-def process_upstream_edge(edge, source_id, target_id, edge_share, outgoing_edges):
+def calculate_change(edge, previous_values_dict):
+    """
+    Calculates the change in share value from previous iteration.
+    
+    Args:
+        edge (dict): Current edge
+        previous_values_dict (dict): Dictionary of previous edge values
+        
+    Returns:
+        float: Absolute change in lower share value
+    """
+    previous_edge_data = previous_values_dict.get(edge['id'], {})
+    previous_share = float(previous_edge_data.get('real_lower_share', 0.0) or 0.0)
+    current_share = edge['real_lower_share']
+    return abs(current_share - previous_share)
+
+def process_upstream_edge(edge, source_id, target_id, edge_share, outgoing_edges, previous_values_dict, max_change):
     """
     Process an upstream edge (target_depth >= 0).
     
@@ -124,6 +152,11 @@ def process_upstream_edge(edge, source_id, target_id, edge_share, outgoing_edges
         target_id: Target entity ID
         edge_share: Parsed share tuple
         outgoing_edges (dict): Map of outgoing edges
+        previous_values_dict (dict): Dictionary of previous edge values
+        max_change (float): Current maximum change
+        
+    Returns:
+        float: Updated maximum change
     """
     # Calculate direct ownership
     if target_id in outgoing_edges:
@@ -135,8 +168,38 @@ def process_upstream_edge(edge, source_id, target_id, edge_share, outgoing_edges
 
     # Update edge with direct ownership
     update_edge_shares(edge, real_share)
+    
+    # Calculate indirect ownership through other paths
+    if source_id in outgoing_edges:
+        for indirect_source_edge in outgoing_edges[source_id]:
+            if indirect_source_edge.get('id') != edge['id']:
+                # Calculate indirect ownership
+                indirect_share = parse_share_string(indirect_source_edge.get('share'))
+                
+                indirect_target_edge = next((e for e in outgoing_edges.get(indirect_source_edge['target'], [])), None)
+                if indirect_target_edge and indirect_target_edge.get('real_lower_share') is not None:
+                    indirect_target_share = get_share_tuple_from_edge(indirect_target_edge)
+                else:
+                    indirect_target_share = (0.0, 0.0, 0.0)
+                
+                # Calculate real indirect share
+                if indirect_source_edge['target_depth'] != 0:
+                    indirect_real_share = multiply_shares(indirect_share, indirect_target_share)
+                else:
+                    indirect_real_share = indirect_share
+                
+                # Combine direct and indirect shares
+                new_real_share = add_shares(indirect_real_share, real_share)
+                update_edge_shares(edge, new_real_share)
+                
+                # Calculate change for convergence check
+                previous_share = float(previous_values_dict.get(edge['id'], {}).get('real_lower_share', 0.0) or 0.0)
+                change = abs(edge['real_lower_share'] - previous_share)
+                max_change = max(max_change, change)
+    
+    return max_change
 
-def process_downstream_edge(edge, source_id, target_id, edge_share, incoming_edges):
+def process_downstream_edge(edge, source_id, target_id, edge_share, incoming_edges, previous_values_dict, max_change):
     """
     Process a downstream edge (target_depth < 0).
     
@@ -146,6 +209,11 @@ def process_downstream_edge(edge, source_id, target_id, edge_share, incoming_edg
         target_id: Target entity ID
         edge_share: Parsed share tuple
         incoming_edges (dict): Map of incoming edges
+        previous_values_dict (dict): Dictionary of previous edge values
+        max_change (float): Current maximum change
+        
+    Returns:
+        float: Updated maximum change
     """
     # Calculate direct ownership
     if source_id in incoming_edges:
@@ -157,6 +225,35 @@ def process_downstream_edge(edge, source_id, target_id, edge_share, incoming_edg
 
     # Update edge with direct ownership
     update_edge_shares(edge, real_share)
+    
+    # Calculate indirect ownership through other paths
+    if target_id in incoming_edges:
+        for indirect_target_edge in incoming_edges[target_id]:
+            if indirect_target_edge.get('id') != edge['id']:
+                # Calculate indirect ownership
+                indirect_share = parse_share_string(indirect_target_edge.get('share'))
+                
+                indirect_source_edge = next((e for e in incoming_edges.get(indirect_target_edge['source'], [])), None)
+                if indirect_source_edge and indirect_source_edge.get('real_lower_share') is not None:
+                    indirect_source_share = get_share_tuple_from_edge(indirect_source_edge)
+                else:
+                    indirect_source_share = (0.0, 0.0, 0.0)
+                
+                # Calculate real indirect share
+                if indirect_target_edge['source_depth'] != 0:
+                    indirect_real_share = multiply_shares(indirect_share, indirect_source_share)
+                else:
+                    indirect_real_share = indirect_share
+                
+                # Combine direct and indirect shares
+                new_real_share = add_shares(indirect_real_share, real_share)
+                update_edge_shares(edge, new_real_share)
+                
+                # Calculate change for convergence check
+                change = calculate_change(edge, previous_values_dict)
+                max_change = max(max_change, change)
+    
+    return max_change
 
 def main(input_file, output_file):
     """

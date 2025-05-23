@@ -49,6 +49,43 @@ Calculate the "real ownership" percentages (lower, average, upper) for entities 
      - Depth > 0: Ownership flows _to_ focus node
      - Depth < 0: Ownership flows _from_ focus node
 
+### Complexity Analysis
+
+Given the time constraints and requirements of this excercise the algorithm performs quite well for graphs that don't have dence cycles as in the provided examples, so there was no further exploration for optimizations done.
+
+#### Time Complexity
+
+- **Overall**: `O(c * E)` (k \* c \* E)
+  Where:
+
+  - E = Number of edges
+  - k = Number of iterations until convergence (configured at 10)
+  - c = Average number of connected edges per node
+    - For sparse graphs (few connections): c ≈ 1, making it effectively O(E)
+    - For dense graphs (many connections): c ≈ E, making it O(E²)
+
+- **Breakdown**:
+  - **Initialization**: O(E log E)
+    - Creating edge maps: O(E)
+    - Sorting edges by depth: O(E log E)
+    - Initializing shares: O(E)
+  - **Per Iteration**: O(E \* c)
+    - Outer loop over all edges: O(E)
+    - Inner processing in `process_upstream_edge`/`process_downstream_edge`: O(c) per edge
+      - For each edge, iterate through connected edges (c)
+      - Sparse graphs (c ≈ 1): nearly constant time per edge
+      - Dense graphs (c ≈ E): linear time per edge
+    - Deep copy of network for previous values: O(E)
+    - Convergence check: O(E)
+
+#### Space Complexity
+
+- **Overall**: `O(E)`
+  - Edge maps (outgoing_edges, incoming_edges): O(E)
+  - Previous values dictionary (deep copy): O(E)
+  - Sorted edges list: O(E)
+  - Input network storage: O(E)
+
 ## Various example usecases explained
 
 1. **Simple ownership (no cycles)**

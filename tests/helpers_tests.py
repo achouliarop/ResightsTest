@@ -1,5 +1,5 @@
 import unittest
-from calculator.helpers import parse_share_string, multiply_shares
+from calculator.helpers import parse_share_string, multiply_shares, add_shares
 
 class HelpersTestCase(unittest.TestCase):
     def test_parse_share_string_empty(self):
@@ -38,6 +38,31 @@ class HelpersTestCase(unittest.TestCase):
         self.assertEqual(
             multiply_shares((0.1, 0.15, 0.2), (0.3, 0.4, 0.5)),
             (0.03, 0.065, 0.1)
+        )
+    
+    def test_add_shares(self):
+        # Basic addition
+        self.assertEqual(
+            add_shares((0.3, 0.3, 0.3), (0.2, 0.2, 0.2)),
+            (0.5, 0.5, 0.5)
+        )
+        
+        # Addition with ranges
+        self.assertEqual(
+            add_shares((0.1, 0.15, 0.2), (0.3, 0.35, 0.4)),
+            (0.4, 0.5, 0.6)
+        )
+        
+        # Addition exceeding 100% (should be clamped)
+        self.assertEqual(
+            add_shares((0.6, 0.6, 0.6), (0.6, 0.6, 0.6)),
+            (1.0, 1.0, 1.0)
+        )
+        
+        # Addition with one value exceeding 100%
+        self.assertEqual(
+            add_shares((0.7, 0.8, 0.9), (0.2, 0.3, 0.4)),
+            (0.9, 0.95, 1.0)
         )
 
 if __name__ == '__main__':
